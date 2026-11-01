@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isStaff() {
+      return isAuthenticated() && (getUserData().role == 'staff' || isAdmin());
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // Menus collection
+    match /menus/{menuId} {
+      allow read: if true; // Publicly viewable by hostel residents
+      allow write: if isAdmin();
+    }
+
+    // Attendance records
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isStaff() || (isAuthenticated() && request.resource.data.studentId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // Leave applications
+    match /leaves/{leaveId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Monthly bills
+    match /bills/{billId} {
+      allow read: if isAuthenticated() && (resource.data.studentId == request.auth.uid || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Feedback
+    match /feedback/{feedbackId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Kitchen wastage logs
+    match /wastageLogs/{logId} {
+      allow read, write: if isStaff();
+    }
+  }
+}
